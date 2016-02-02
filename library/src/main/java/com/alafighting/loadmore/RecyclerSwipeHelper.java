@@ -1,16 +1,16 @@
 package com.alafighting.loadmore;
 
+import android.content.res.Resources;
 import android.os.Handler;
 import android.os.Message;
 import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.StaggeredGridLayoutManager;
-import android.util.Log;
-import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.LinearLayout;
+import android.widget.RelativeLayout;
+import android.widget.TextView;
 
 import com.lsjwzh.widget.materialloadingprogressbar.CircleProgressBar;
 
@@ -133,15 +133,27 @@ public class RecyclerSwipeHelper {
         this(swipe, recycler, new OnCreateFooterViewListener() {
             @Override
             public View onCreateFooterView(ViewGroup parent) {
+                // 创建底部加载更多的View
                 CircleProgressBar progressBar = new CircleProgressBar(parent.getContext());
                 progressBar.setCircleBackgroundEnabled(false);
                 progressBar.setShowArrow(false);
                 progressBar.setColorSchemeResources(android.R.color.holo_blue_light,android.R.color.holo_orange_light,android.R.color.holo_red_light);
-                LinearLayout linearLayout = new LinearLayout(parent.getContext());
-                linearLayout.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-                linearLayout.addView(progressBar);
-                linearLayout.setGravity(Gravity.CENTER);
-                return linearLayout;
+
+                TextView tips = new TextView(parent.getContext());
+                tips.setId(android.R.id.text1);
+                tips.setTextColor(Resources.getSystem().getColor(android.R.color.holo_blue_light));
+                tips.setText("加载中...");
+
+                RelativeLayout layout = new RelativeLayout(parent.getContext());
+                layout.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+                layout.addView(progressBar);
+                layout.addView(tips);
+
+                ((RelativeLayout.LayoutParams)tips.getLayoutParams()).addRule(RelativeLayout.CENTER_IN_PARENT);
+
+                ((RelativeLayout.LayoutParams)progressBar.getLayoutParams()).addRule(RelativeLayout.CENTER_IN_PARENT);
+                ((RelativeLayout.LayoutParams)progressBar.getLayoutParams()).addRule(RelativeLayout.LEFT_OF, tips.getId());
+                return layout;
             }
         });
     }
