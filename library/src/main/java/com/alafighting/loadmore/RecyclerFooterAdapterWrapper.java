@@ -203,11 +203,13 @@ public abstract class RecyclerFooterAdapterWrapper extends RecyclerView.Adapter<
 
     @Override
     public void registerAdapterDataObserver(RecyclerView.AdapterDataObserver observer) {
+        super.registerAdapterDataObserver(observer);
         mRealAdapter.registerAdapterDataObserver(observer);
     }
 
     @Override
     public void unregisterAdapterDataObserver(RecyclerView.AdapterDataObserver observer) {
+        super.unregisterAdapterDataObserver(observer);
         mRealAdapter.unregisterAdapterDataObserver(observer);
     }
 

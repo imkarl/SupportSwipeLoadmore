@@ -1,6 +1,8 @@
 package com.alafighting.loadmore;
 
+import android.annotation.SuppressLint;
 import android.content.res.Resources;
+import android.graphics.Color;
 import android.os.Handler;
 import android.os.Message;
 import android.support.v4.widget.SwipeRefreshLayout;
@@ -29,6 +31,7 @@ public class RecyclerSwipeHelper {
     private static final int WHAT_DISPATCH_NOTIFY_REFRESH = 103;
     private static final int WHAT_DISPATCH_NOTIFY_LOADMORE = 104;
 
+    @SuppressLint("HandlerLeak")
     private static Handler mHandler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
@@ -85,7 +88,7 @@ public class RecyclerSwipeHelper {
 
     /**
      * 通知刷新
-     * @param listener
+     * @param listener 下拉刷新监听
      */
     private static void onNotify(SwipeRefreshLayout.OnRefreshListener listener) {
         Message message = new Message();
@@ -95,7 +98,7 @@ public class RecyclerSwipeHelper {
     }
     /**
      * 通知加载更多
-     * @param listener
+     * @param listener 加载更多监听
      */
     private static void onNotify(OnLoadmoreListener listener) {
         Message message = new Message();
@@ -137,11 +140,13 @@ public class RecyclerSwipeHelper {
                 CircleProgressBar progressBar = new CircleProgressBar(parent.getContext());
                 progressBar.setCircleBackgroundEnabled(false);
                 progressBar.setShowArrow(false);
-                progressBar.setColorSchemeResources(android.R.color.holo_blue_light,android.R.color.holo_orange_light,android.R.color.holo_red_light);
+                progressBar.setColorSchemeColors(Color.parseColor("#ff33b5e5"),
+                        Color.parseColor("#ffffbb33"),
+                        Color.parseColor("#ffff4444"));
 
                 TextView tips = new TextView(parent.getContext());
                 tips.setId(android.R.id.text1);
-                tips.setTextColor(Resources.getSystem().getColor(android.R.color.holo_blue_light));
+                tips.setTextColor(Color.parseColor("#ff33b5e5"));
                 tips.setText("加载中...");
 
                 RelativeLayout layout = new RelativeLayout(parent.getContext());
@@ -208,7 +213,7 @@ public class RecyclerSwipeHelper {
 
     /**
      * 添加刷新监听
-     * @param listener
+     * @param listener 下拉刷新监听
      */
     public void addOnRefreshListener(SwipeRefreshLayout.OnRefreshListener listener) {
         mRefreshListeners.add(new WeakReference<>(listener));
@@ -216,7 +221,7 @@ public class RecyclerSwipeHelper {
 
     /**
      * 添加加载更多监听
-     * @param listener
+     * @param listener 加载更多监听
      */
     public void addOnLoadmoreListener(OnLoadmoreListener listener) {
         mLoadmoreListeners.add(new WeakReference<>(listener));
@@ -224,7 +229,7 @@ public class RecyclerSwipeHelper {
 
     /**
      * 设置是否启用加载更多功能
-     * @param enabled
+     * @param enabled 是否启用
      */
     public void setLoadmoreEnabled(boolean enabled) {
         mIsLoadmoreEnabled = enabled;
@@ -234,7 +239,7 @@ public class RecyclerSwipeHelper {
 
     /**
      * 设置当前是否刷新状态
-     * @param refreshing
+     * @param refreshing 是否刷新状态
      */
     public void setRefreshing(boolean refreshing) {
         SwipeRefreshLayout swipe = mSwipe.get();
@@ -255,10 +260,18 @@ public class RecyclerSwipeHelper {
         return false;
     }
 
+    /**
+     * 获取真实的Adapter
+     * @return 原始Adapter
+     */
+    public RecyclerView.Adapter getRealAdapter() {
+        return mAdapterWrapper.getRealAdapter();
+    }
+
 
     /**
      * 设置当前是否加载更多状态
-     * @param loadmoreing
+     * @param loadmoreing 是否加载更多状态
      */
     public void setLoadmoreing(boolean loadmoreing) {
         mAdapterWrapper.setLoadmoreing(loadmoreing);
@@ -271,17 +284,19 @@ public class RecyclerSwipeHelper {
     }
 
 
-
     /**
      * 设置刷新监听
-     * @param listener
+     * @param swipe SwipeRefreshLayout
+     * @param listener 下拉刷新监听
      */
     private static void setOnRefreshListener(SwipeRefreshLayout swipe, SwipeRefreshLayout.OnRefreshListener listener) {
         swipe.setOnRefreshListener(listener);
     }
+
     /**
      * 设置加载更多监听
-     * @param listener
+     * @param recycler RecyclerView
+     * @param listener 加载更多监听
      */
     private static void setOnLoadmoreListener(final RecyclerView recycler, final OnLoadmoreListener listener) {
         RecyclerView.LayoutManager layoutManager = recycler.getLayoutManager();
@@ -306,8 +321,8 @@ public class RecyclerSwipeHelper {
 
     /**
      * 检查是否需要执行Loadmore
-     * @param recycler
-     * @param listener
+     * @param recycler RecyclerView
+     * @param listener 加载更多监听
      */
     private static void checkLoadmore(RecyclerView recycler, OnLoadmoreListener listener) {
         RecyclerView.LayoutManager layoutManager = recycler.getLayoutManager();
