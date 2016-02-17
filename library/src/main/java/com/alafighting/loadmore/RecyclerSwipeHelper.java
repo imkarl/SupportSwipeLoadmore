@@ -1,24 +1,12 @@
 package com.alafighting.loadmore;
 
-import android.annotation.SuppressLint;
-import android.content.res.Resources;
-import android.graphics.Color;
 import android.os.Handler;
 import android.os.Message;
 import android.support.v4.widget.SwipeRefreshLayout;
+import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.StaggeredGridLayoutManager;
-import android.view.View;
-import android.view.ViewGroup;
-import android.widget.RelativeLayout;
-import android.widget.TextView;
-
-import com.lsjwzh.widget.materialloadingprogressbar.CircleProgressBar;
-
-import java.lang.ref.WeakReference;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * 下拉刷新\上拉加载更多的辅助类
@@ -28,244 +16,186 @@ public class RecyclerSwipeHelper {
 
     private static final int WHAT_ON_REFRESH = 101;
     private static final int WHAT_ON_LOADMORE = 102;
-    private static final int WHAT_DISPATCH_NOTIFY_REFRESH = 103;
-    private static final int WHAT_DISPATCH_NOTIFY_LOADMORE = 104;
 
-    @SuppressLint("HandlerLeak")
-    private static Handler mHandler = new Handler() {
+    /**
+     * 触发加载更多的阀值（示例：3表示距底部仅3个item时加载更多）
+     */
+    public static final int LOADING_TRIGGER_THRESHOLD = 3;
+
+    private Handler mHandler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
             super.handleMessage(msg);
 
             switch (msg.what) {
-                case WHAT_DISPATCH_NOTIFY_REFRESH:
-                    Object[] argsRefresh = (Object[]) msg.obj;
-                    RecyclerFooterAdapterWrapper wrapperRefresh = (RecyclerFooterAdapterWrapper) argsRefresh[0];
-                    List<WeakReference<SwipeRefreshLayout.OnRefreshListener>> listenersRefresh = (List<WeakReference<SwipeRefreshLayout.OnRefreshListener>>) argsRefresh[1];
+                case WHAT_ON_REFRESH:
+                    // TODO 是否有必要？
+//                    if (isLoadmoreing() && isEnabledLoadmore()) {
+//                        setRefreshing(false);
+//                        return;
+//                    }
 
-                    wrapperRefresh.setLoadmoreEnabled(false);
-                    for (WeakReference<SwipeRefreshLayout.OnRefreshListener> weak : listenersRefresh) {
-                        SwipeRefreshLayout.OnRefreshListener listener = weak.get();
-                        if (listener != null) {
-                            onNotify(listener);
-                        }
+                    if (mRefreshListener != null) {
+                        mRefreshListener.onRefresh();
                     }
                     break;
 
-                case WHAT_DISPATCH_NOTIFY_LOADMORE:
-                    Object[] argsLoadmore = (Object[]) msg.obj;
-                    RecyclerFooterAdapterWrapper wrapperLoadmore = (RecyclerFooterAdapterWrapper) argsLoadmore[0];
-                    List<WeakReference<OnLoadmoreListener>> listenersLoadmore = (List<WeakReference<OnLoadmoreListener>>) argsLoadmore[1];
-                    if (!wrapperLoadmore.isLoadingmoreEnabled() || wrapperLoadmore.isLoadingmoreing()) {
+                case WHAT_ON_LOADMORE:
+                    if (isRefreshing() || isLoadmoreing() || !isEnabledLoadmore()) {
+                        return;
+                    }
+                    if (mRecycler.getAdapter() == null || mRecycler.getAdapter().getItemCount() == 0) {
                         return;
                     }
 
-                    // TODO 此处需要禁用下拉功能
+                    // 此处改变显示内容
+                    mAdapterWrapper.setLoadmoreing(true);
 
-                    wrapperLoadmore.setLoadmoreing(true);
-                    for (WeakReference<OnLoadmoreListener> weak : listenersLoadmore) {
-                        OnLoadmoreListener listener = weak.get();
-                        if (listener != null) {
-                            onNotify(listener);
-                        }
-                    }
-                    break;
-
-                case WHAT_ON_REFRESH:
-                case WHAT_ON_LOADMORE:
-                    Object listener = msg.obj;
-                    if (listener != null) {
-                        if (listener instanceof SwipeRefreshLayout.OnRefreshListener) {
-                            ((SwipeRefreshLayout.OnRefreshListener) listener).onRefresh();
-                        } else if (listener instanceof OnLoadmoreListener) {
-                            ((OnLoadmoreListener) listener).onLoadmore();
-                        }
+                    if (mLoadmoreListener != null) {
+                        mLoadmoreListener.onLoadmore();
                     }
                     break;
             }
         }
     };
 
-    /**
-     * 通知刷新
-     * @param listener 下拉刷新监听
-     */
-    private static void onNotify(SwipeRefreshLayout.OnRefreshListener listener) {
-        Message message = new Message();
-        message.what = WHAT_ON_REFRESH;
-        message.obj = listener;
-        mHandler.sendMessage(message);
-    }
-    /**
-     * 通知加载更多
-     * @param listener 加载更多监听
-     */
-    private static void onNotify(OnLoadmoreListener listener) {
-        Message message = new Message();
-        message.what = WHAT_ON_LOADMORE;
-        message.obj = listener;
-        mHandler.sendMessage(message);
-    }
+    private RecyclerView.OnScrollListener WrapperScrollListener = new RecyclerView.OnScrollListener() {
+        @Override
+        public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
+            super.onScrolled(recyclerView, dx, dy);
+            checkLoadmore();
+        }
+    };
+    private RecyclerView.AdapterDataObserver mDataObserver = new RecyclerView.AdapterDataObserver() {
+        @Override
+        public void onChanged() {
+            mAdapterWrapper.notifyDataSetChanged();
+            checkLoadmore();
+        }
+        @Override
+        public void onItemRangeInserted(int positionStart, int itemCount) {
+            mAdapterWrapper.notifyItemRangeInserted(positionStart, itemCount);
+            checkLoadmore();
+        }
+        @Override
+        public void onItemRangeChanged(int positionStart, int itemCount) {
+            mAdapterWrapper.notifyItemRangeChanged(positionStart, itemCount);
+            checkLoadmore();
+        }
+        @Override
+        public void onItemRangeChanged(int positionStart, int itemCount, Object payload) {
+            mAdapterWrapper.notifyItemRangeChanged(positionStart, itemCount, payload);
+            checkLoadmore();
+        }
+        @Override
+        public void onItemRangeRemoved(int positionStart, int itemCount) {
+            mAdapterWrapper.notifyItemRangeRemoved(positionStart, itemCount);
+            checkLoadmore();
+        }
+        @Override
+        public void onItemRangeMoved(int fromPosition, int toPosition, int itemCount) {
+            mAdapterWrapper.notifyItemMoved(fromPosition, toPosition);
+            checkLoadmore();
+        }
+    };
 
-    /**
-     * 分发刷新通知
-     */
-    private void dispatchNotifyRefresh() {
-        Message message = new Message();
-        message.what = WHAT_DISPATCH_NOTIFY_REFRESH;
-        message.obj = new Object[]{mAdapterWrapper, mRefreshListeners};
-        mHandler.sendMessage(message);
-    }
-    /**
-     * 分发加载更多通知
-     */
-    private void dispatchNotifyLoadmore() {
-        Message message = new Message();
-        message.what = WHAT_DISPATCH_NOTIFY_LOADMORE;
-        message.obj = new Object[]{mAdapterWrapper, mLoadmoreListeners};
-        mHandler.sendMessage(message);
-    }
-
-    private final List<WeakReference<SwipeRefreshLayout.OnRefreshListener>> mRefreshListeners = new ArrayList<>();
-    private final List<WeakReference<OnLoadmoreListener>> mLoadmoreListeners = new ArrayList<>();
-    private final RecyclerFooterAdapterWrapper mAdapterWrapper;
+    private SwipeRefreshLayout mSwipe;
+    private RecyclerView mRecycler;
+    private SwipeRefreshLayout.OnRefreshListener mRefreshListener;
+    private OnLoadmoreListener mLoadmoreListener;
+    private RecyclerFooterAdapterWrapper mAdapterWrapper;
+    private SpanSizeLookupWrapper mSpanSizeLookup;
     private boolean mIsLoadmoreEnabled = true;
 
-    private WeakReference<SwipeRefreshLayout> mSwipe;
     public RecyclerSwipeHelper(SwipeRefreshLayout swipe, RecyclerView recycler) {
-        this(swipe, recycler, new OnCreateFooterViewListener() {
-            @Override
-            public View onCreateFooterView(ViewGroup parent) {
-                // 创建底部加载更多的View
-                CircleProgressBar progressBar = new CircleProgressBar(parent.getContext());
-                progressBar.setCircleBackgroundEnabled(false);
-                progressBar.setShowArrow(false);
-                progressBar.setColorSchemeColors(Color.parseColor("#ff33b5e5"),
-                        Color.parseColor("#ffffbb33"),
-                        Color.parseColor("#ffff4444"));
-
-                TextView tips = new TextView(parent.getContext());
-                tips.setId(android.R.id.text1);
-                tips.setTextColor(Color.parseColor("#ff33b5e5"));
-                tips.setText("加载中...");
-
-                RelativeLayout layout = new RelativeLayout(parent.getContext());
-                layout.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-                layout.addView(progressBar);
-                layout.addView(tips);
-
-                ((RelativeLayout.LayoutParams)tips.getLayoutParams()).addRule(RelativeLayout.CENTER_IN_PARENT);
-
-                ((RelativeLayout.LayoutParams)progressBar.getLayoutParams()).addRule(RelativeLayout.CENTER_IN_PARENT);
-                ((RelativeLayout.LayoutParams)progressBar.getLayoutParams()).addRule(RelativeLayout.LEFT_OF, tips.getId());
-                return layout;
-            }
-        });
-    }
-    public RecyclerSwipeHelper(SwipeRefreshLayout swipe, RecyclerView recycler, final OnCreateFooterViewListener createFooterView) {
-        this.mSwipe = new WeakReference<>(swipe);
+        this.mSwipe = swipe;
+        this.mRecycler = recycler;
 
         // 刷新监听
-        setOnRefreshListener(swipe, new SwipeRefreshLayout.OnRefreshListener() {
+        mSwipe.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
             @Override
             public void onRefresh() {
-                if (isLoadmoreing()) {
-                    SwipeRefreshLayout swipe = mSwipe.get();
-                    if (swipe != null) {
-                        swipe.setRefreshing(false);
-                    }
-                    return;
-                }
-
-                dispatchNotifyRefresh();
+                mHandler.sendEmptyMessage(WHAT_ON_REFRESH);
             }
         });
 
-        // 加载更多监听
-        setOnLoadmoreListener(recycler, new OnLoadmoreListener() {
-            @Override
-            public void onLoadmore() {
-                mHandler.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        SwipeRefreshLayout swipe = mSwipe.get();
-                        if (swipe != null) {
-                            if (swipe.isRefreshing()) {
-                                setLoadmoreing(false);
-                                return;
-                            }
-                        }
-
-                        dispatchNotifyLoadmore();
-                    }
-                });
-            }
-        });
+        // 滑动监听
+        mRecycler.addOnScrollListener(WrapperScrollListener);
 
         // 包装数据源
         mAdapterWrapper = new RecyclerFooterAdapterWrapper(recycler) {
             @Override
-            protected View onCreateFooterView(ViewGroup parent) {
-                return createFooterView.onCreateFooterView(parent);
+            public void setAdapter(RecyclerView.Adapter adapter) {
+                if (getRealAdapter() != null) {
+                    unregisterAdapterDataObserver(mDataObserver);
+                }
+                super.setAdapter(adapter);
+                if (getRealAdapter() != null) {
+                    registerAdapterDataObserver(mDataObserver);
+                }
             }
         };
+        mAdapterWrapper.registerAdapterDataObserver(mDataObserver);
+
+        // For GridLayoutManager use separate/customisable span lookup for loading row
+        if (mRecycler.getLayoutManager() instanceof GridLayoutManager) {
+            mSpanSizeLookup = new SpanSizeLookupWrapper((GridLayoutManager) mRecycler.getLayoutManager(), mAdapterWrapper);
+            ((GridLayoutManager) mRecycler.getLayoutManager()).setSpanSizeLookup(mSpanSizeLookup);
+        }
     }
 
     /**
-     * 添加刷新监听
-     * @param listener 下拉刷新监听
+     * 解除绑定
      */
-    public void addOnRefreshListener(SwipeRefreshLayout.OnRefreshListener listener) {
-        mRefreshListeners.add(new WeakReference<>(listener));
+    public void unbind() {
+        mSwipe.setOnRefreshListener(null);
+        mRecycler.removeOnScrollListener(WrapperScrollListener);   // Remove scroll listener
+        mAdapterWrapper.unregisterAdapterDataObserver(mDataObserver); // Remove data observer
+        mRecycler.setAdapter(mAdapterWrapper.getRealAdapter()); // Swap back original adapter
+        if (mRecycler.getLayoutManager() instanceof GridLayoutManager && mSpanSizeLookup != null) {
+            // Swap back original SpanSizeLookup
+            GridLayoutManager.SpanSizeLookup spanSizeLookup = mSpanSizeLookup.getWrapper();
+            ((GridLayoutManager) mRecycler.getLayoutManager()).setSpanSizeLookup(spanSizeLookup);
+        }
     }
 
     /**
-     * 添加加载更多监听
-     * @param listener 加载更多监听
+     * 设置刷新监听
+     * @param listener 监听器
      */
-    public void addOnLoadmoreListener(OnLoadmoreListener listener) {
-        mLoadmoreListeners.add(new WeakReference<>(listener));
+    public void setOnRefreshListener(SwipeRefreshLayout.OnRefreshListener listener) {
+        mRefreshListener = listener;
     }
 
     /**
-     * 设置是否启用加载更多功能
-     * @param enabled 是否启用
+     * 设置加载更多监听
+     * @param listener 监听器
      */
-    public void setLoadmoreEnabled(boolean enabled) {
-        mIsLoadmoreEnabled = enabled;
-        mAdapterWrapper.setLoadmoreEnabled(enabled);
-        dispatchNotifyLoadmore();
+    public void setOnLoadmoreListener(OnLoadmoreListener listener) {
+        mLoadmoreListener = listener;
     }
+
+    /**
+     * 设置加载进度条的创建器
+     * @param creator 创建器
+     */
+    public void setFooterViewCreator(FooterViewCreator creator) {
+        mAdapterWrapper.setFooterViewCreator(creator);
+    }
+
 
     /**
      * 设置当前是否刷新状态
      * @param refreshing 是否刷新状态
      */
     public void setRefreshing(boolean refreshing) {
-        SwipeRefreshLayout swipe = mSwipe.get();
-        if (swipe != null) {
-            swipe.setRefreshing(refreshing);
-        }
-        mAdapterWrapper.setLoadmoreEnabled(mIsLoadmoreEnabled);
-        mAdapterWrapper.setLoadmoreing(false);
+        mSwipe.setRefreshing(refreshing);
     }
     /**
      * 返回当前是否刷新状态
      */
     public boolean isRefreshing() {
-        SwipeRefreshLayout swipe = mSwipe.get();
-        if (swipe != null) {
-            return swipe.isRefreshing();
-        }
-        return false;
-    }
-
-    /**
-     * 获取真实的Adapter
-     * @return 原始Adapter
-     */
-    public RecyclerView.Adapter getRealAdapter() {
-        return mAdapterWrapper.getRealAdapter();
+        return mSwipe.isRefreshing();
     }
 
 
@@ -283,71 +213,53 @@ public class RecyclerSwipeHelper {
         return mAdapterWrapper.isLoadingmoreing();
     }
 
-
     /**
-     * 设置刷新监听
-     * @param swipe SwipeRefreshLayout
-     * @param listener 下拉刷新监听
+     * 设置是否启用加载更多功能
+     * @param enabled 是否启用加载更多
      */
-    private static void setOnRefreshListener(SwipeRefreshLayout swipe, SwipeRefreshLayout.OnRefreshListener listener) {
-        swipe.setOnRefreshListener(listener);
-    }
-
-    /**
-     * 设置加载更多监听
-     * @param recycler RecyclerView
-     * @param listener 加载更多监听
-     */
-    private static void setOnLoadmoreListener(final RecyclerView recycler, final OnLoadmoreListener listener) {
-        RecyclerView.LayoutManager layoutManager = recycler.getLayoutManager();
-        if (layoutManager == null) {
-            throw new UnsupportedOperationException("layoutManager不能为空");
-        }
-        if (!(layoutManager instanceof LinearLayoutManager || layoutManager instanceof StaggeredGridLayoutManager)) {
-            throw new UnsupportedOperationException("只支持LinearLayoutManager|StaggeredGridLayoutManager");
-        }
-
-        recycler.addOnScrollListener(new RecyclerView.OnScrollListener() {
-            public void onScrollStateChanged(RecyclerView recyclerView, int newState) {
-                if (recycler.getAdapter() == null || recycler.getAdapter().getItemCount() == 0) {
-                    return;
-                }
-                if (newState == RecyclerView.SCROLL_STATE_IDLE) {
-                    checkLoadmore(recycler, listener);
-                }
+    public void setEnabledLoadmore(boolean enabled) {
+        if (mIsLoadmoreEnabled != enabled) {
+            mIsLoadmoreEnabled = enabled;
+            if (!mIsLoadmoreEnabled) {
+                setLoadmoreing(false);
             }
-        });
+        }
     }
+    public boolean isEnabledLoadmore() {
+        return mIsLoadmoreEnabled;
+    }
+
+    public RecyclerView.Adapter getRealAdapter() {
+        return mAdapterWrapper.getRealAdapter();
+    }
+
 
     /**
      * 检查是否需要执行Loadmore
-     * @param recycler RecyclerView
-     * @param listener 加载更多监听
      */
-    private static void checkLoadmore(RecyclerView recycler, OnLoadmoreListener listener) {
-        RecyclerView.LayoutManager layoutManager = recycler.getLayoutManager();
-        if (layoutManager instanceof LinearLayoutManager) {
-            int lastVisibleItem = ((LinearLayoutManager) layoutManager).findLastVisibleItemPosition();
+    void checkLoadmore() {
+        int visibleItemCount = mRecycler.getChildCount();
+        int totalItemCount = mRecycler.getLayoutManager().getItemCount();
 
-            int totalItemCount = recycler.getAdapter().getItemCount();
-            if (lastVisibleItem >= totalItemCount - 1) {
-                listener.onLoadmore();
+        int firstVisibleItemPosition;
+        if (mRecycler.getLayoutManager() instanceof LinearLayoutManager) {
+            firstVisibleItemPosition = ((LinearLayoutManager) mRecycler.getLayoutManager()).findFirstVisibleItemPosition();
+        } else if (mRecycler.getLayoutManager() instanceof StaggeredGridLayoutManager) {
+            // https://code.google.com/p/android/issues/detail?id=181461
+            if (mRecycler.getLayoutManager().getChildCount() > 0) {
+                firstVisibleItemPosition = ((StaggeredGridLayoutManager) mRecycler.getLayoutManager()).findFirstVisibleItemPositions(null)[0];
+            } else {
+                firstVisibleItemPosition = 0;
             }
-        } else if (layoutManager instanceof StaggeredGridLayoutManager) {
-            StaggeredGridLayoutManager gridLayoutManager = (StaggeredGridLayoutManager) layoutManager;
-            int last[] = new int[gridLayoutManager.getSpanCount()];
-            gridLayoutManager.findLastVisibleItemPositions(last);
-
-            int totalItemCount = recycler.getAdapter().getItemCount();
-            for (int i = 0; i < last.length; i++) {
-                int lastVisibleItem = last[i];
-                if (lastVisibleItem >= totalItemCount - 1) {
-                    listener.onLoadmore();
-                    break;
-                }
-            }
+        } else {
+            throw new IllegalStateException("LayoutManager needs to subclass LinearLayoutManager or StaggeredGridLayoutManager");
         }
 
+        // Check if end of the list is reached (counting threshold) or if there is no items at all
+        if ((totalItemCount - visibleItemCount) <= (firstVisibleItemPosition + LOADING_TRIGGER_THRESHOLD)
+                || totalItemCount == 0) {
+            mHandler.sendEmptyMessage(WHAT_ON_LOADMORE);
+        }
     }
 
 }

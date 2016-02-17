@@ -1,24 +1,27 @@
 package com.alafighting.loadmore;
 
+import android.graphics.Color;
 import android.support.v7.widget.RecyclerView;
-import android.support.v7.widget.StaggeredGridLayoutManager;
-import android.support.v7.widget.SupportRecycledViewPool;
+import android.support.v7.widget.RecycledViewPoolWrapper;
 import android.view.View;
 import android.view.ViewGroup;
-
-import java.util.List;
+import android.widget.ProgressBar;
+import android.widget.RelativeLayout;
+import android.widget.TextView;
 
 /**
  * 支持底部显示加载更多的Adapter
  * @author alafighting 2016-01
  */
-public abstract class RecyclerFooterAdapterWrapper extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
+public class RecyclerFooterAdapterWrapper extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     public static final int TYPE_FOOTER = -1;
 
     private RecyclerView mRecycler;
     private RecyclerView.Adapter mRealAdapter;
-    private boolean mIsLoadmoreEnabled = true;
+    private FooterViewCreator mFooterViewCreator;
     private boolean mIsLoadmoreing = false;
+
+    private FooterHolder mFooterHolder;
 
     private static class FooterHolder extends RecyclerView.ViewHolder {
         public FooterHolder(View itemView) {
@@ -30,66 +33,25 @@ public abstract class RecyclerFooterAdapterWrapper extends RecyclerView.Adapter<
         this.mRecycler = recycler;
         this.mRealAdapter = recycler.getAdapter();
 
-        recycler.setAdapter(this);
-        recycler.setRecycledViewPool(new SupportRecycledViewPool() {
+        mRecycler.setAdapter(this);
+        mRecycler.setRecycledViewPool(new RecycledViewPoolWrapper(recycler.getRecycledViewPool()) {
             @Override
             public void onAdapterChanged(RecyclerView.Adapter oldAdapter,
-                                         RecyclerView.Adapter newAdapter,
-                                         boolean compatibleWithPrevious) {
-                super.onAdapterChanged(oldAdapter, newAdapter, compatibleWithPrevious);
+                                         RecyclerView.Adapter newAdapter) {
+                super.onAdapterChanged(oldAdapter, newAdapter);
 
-                if (newAdapter != RecyclerFooterAdapterWrapper.this) {
-                    RecyclerFooterAdapterWrapper.this.setAdapter(newAdapter);
-                    mRecycler.setAdapter(RecyclerFooterAdapterWrapper.this);
+                RecyclerFooterAdapterWrapper wrapper = RecyclerFooterAdapterWrapper.this;
+                if (newAdapter instanceof RecyclerFooterAdapterWrapper) {
+                    wrapper = (RecyclerFooterAdapterWrapper) newAdapter;
+                } else {
+                    wrapper.setAdapter(newAdapter);
+                }
+
+                if (wrapper != RecyclerFooterAdapterWrapper.this) {
+                    mRecycler.setAdapter(wrapper);
                 }
             }
         });
-    }
-
-    public RecyclerView.Adapter getRealAdapter() {
-        return this.mRealAdapter;
-    }
-    public void setAdapter(RecyclerView.Adapter adapter) {
-        this.mRealAdapter = adapter;
-    }
-    public void setLoadmoreEnabled(boolean enabled) {
-        if (mIsLoadmoreEnabled == enabled) {
-            return;
-        }
-
-        mIsLoadmoreEnabled = enabled;
-        if (!mIsLoadmoreEnabled) {
-            mIsLoadmoreing = false;
-        }
-        notifyDataSetChangedAll();
-    }
-    public boolean isLoadingmoreEnabled() {
-        return mIsLoadmoreEnabled;
-    }
-    public void setLoadmoreing(boolean loadmoreing) {
-        if (mIsLoadmoreing == loadmoreing) {
-            return;
-        }
-
-        mIsLoadmoreing = loadmoreing;
-        notifyDataSetChangedAll();
-
-        if (mIsLoadmoreing) {
-            mRecycler.smoothScrollToPosition(getItemCount());
-        }
-    }
-    public boolean isLoadingmoreing() {
-        return mIsLoadmoreing;
-    }
-
-    /**
-     * 刷新列表
-     */
-    private void notifyDataSetChangedAll() {
-        super.notifyDataSetChanged();
-        if (mRealAdapter != null) {
-            mRealAdapter.notifyDataSetChanged();
-        }
     }
 
     @Override
@@ -97,8 +59,10 @@ public abstract class RecyclerFooterAdapterWrapper extends RecyclerView.Adapter<
         RecyclerView.ViewHolder holder;
         switch (viewType){
             case TYPE_FOOTER:
-                View footerView = onCreateFooterView(parent);
-                holder = new FooterHolder(footerView);
+                if (mFooterHolder == null) {
+                    mFooterHolder = new FooterHolder(createFooterView(parent));
+                }
+                holder = mFooterHolder;
                 break;
             default:
                 holder = mRealAdapter.onCreateViewHolder(parent, viewType);
@@ -107,56 +71,114 @@ public abstract class RecyclerFooterAdapterWrapper extends RecyclerView.Adapter<
         return holder;
     }
 
-    /**
-     * 创建底部显示加载更多的View
-     * @param parent
-     * @return
-     */
-    protected abstract View onCreateFooterView(ViewGroup parent);
-
     @Override
     public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
         if (holder instanceof FooterHolder) {
-            RecyclerView.LayoutParams params = (RecyclerView.LayoutParams) holder.itemView.getLayoutParams();
-            if (params != null) {
-                if (params instanceof StaggeredGridLayoutManager.LayoutParams) {
-                    ((StaggeredGridLayoutManager.LayoutParams) params).setFullSpan(true);
-                }
+            if (isLoadingmoreing()) {
+                holder.itemView.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                holder.itemView.setVisibility(View.VISIBLE);
+            } else {
+                holder.itemView.getLayoutParams().height = 10;
+                holder.itemView.setVisibility(View.GONE);
             }
             return;
         }
         mRealAdapter.onBindViewHolder(holder, position);
     }
 
-    @Override
-    public void onBindViewHolder(RecyclerView.ViewHolder holder, int position, List<Object> payloads) {
-        if (holder instanceof FooterHolder) {
-            this.onBindViewHolder(holder, position);
-            return;
-        }
-        mRealAdapter.onBindViewHolder(holder, position, payloads);
+    public void setFooterViewCreator(FooterViewCreator creator) {
+        this.mFooterViewCreator = creator;
     }
+
+    /**
+     * 创建底部显示加载更多的ViewmFooterHolder
+     * @param parent 父级控件
+     * @return 加载更多的View
+     */
+    View createFooterView(ViewGroup parent) {
+        if (mFooterViewCreator != null) {
+            return mFooterViewCreator.onCreateView(parent);
+        }
+
+        // 创建底部加载更多的View
+        ProgressBar progressBar = new ProgressBar(parent.getContext());
+        progressBar.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView tips = new TextView(parent.getContext());
+        tips.setId(android.R.id.text1);
+        tips.setTextColor(Color.parseColor("#ff33b5e5"));
+        tips.setText("加载中...");
+
+        RelativeLayout layout = new RelativeLayout(parent.getContext());
+        layout.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        layout.addView(progressBar);
+        layout.addView(tips);
+
+        ((RelativeLayout.LayoutParams)tips.getLayoutParams()).addRule(RelativeLayout.CENTER_IN_PARENT);
+
+        ((RelativeLayout.LayoutParams)progressBar.getLayoutParams()).addRule(RelativeLayout.CENTER_IN_PARENT);
+        ((RelativeLayout.LayoutParams)progressBar.getLayoutParams()).addRule(RelativeLayout.LEFT_OF, tips.getId());
+        return layout;
+    }
+
+    public RecyclerView.Adapter getRealAdapter() {
+        return this.mRealAdapter;
+    }
+    public void setAdapter(RecyclerView.Adapter adapter) {
+        this.mRealAdapter = adapter;
+    }
+
+    public void setLoadmoreing(boolean loadmoreing) {
+        if (mIsLoadmoreing != loadmoreing) {
+            mIsLoadmoreing = loadmoreing;
+            notifyItemChanged(getItemCount() - 1);
+            // 强制刷新
+            onBindViewHolder(mFooterHolder, getItemCount()-1);
+        }
+    }
+    public boolean isLoadingmoreing() {
+        return mIsLoadmoreing;
+    }
+
+    // TODO
+    boolean isLoadingRow(int position) {
+        return position == getLoadingRowPosition();
+    }
+//    boolean isLoadingRow(int position) {
+//        return isLoadingmoreing() && position == getLoadingRowPosition();
+//    }
+
+    // TODO
+    private int getLoadingRowPosition() {
+        return getItemCount() - 1;
+    }
+//    private int getLoadingRowPosition() {
+//        return isLoadingmoreing() ? getItemCount() - 1 : -1;
+//    }
 
     @Override
     public int getItemViewType(int position) {
-        if (mIsLoadmoreEnabled && mIsLoadmoreing) {
-            if (position == getItemCount() - 1) {
-                return TYPE_FOOTER;
-            }
-        }
-        return mRealAdapter.getItemViewType(position);
+        return isLoadingRow(position) ? TYPE_FOOTER : mRealAdapter.getItemViewType(position);
     }
 
+    // TODO
     @Override
     public int getItemCount() {
-        if (mIsLoadmoreEnabled && mIsLoadmoreing) {
-            return mRealAdapter.getItemCount() + 1;
-        }
-        return mRealAdapter.getItemCount();
+        return mRealAdapter.getItemCount() + 1;
     }
+//    @Override
+//    public int getItemCount() {
+//        if (isLoadingmoreing()) {
+//            return mRealAdapter.getItemCount() + 1;
+//        }
+//        return mRealAdapter.getItemCount();
+//    }
 
     @Override
     public void setHasStableIds(boolean hasStableIds) {
+        if (mRealAdapter == null) {
+            return;
+        }
         mRealAdapter.setHasStableIds(hasStableIds);
     }
 
@@ -179,7 +201,7 @@ public abstract class RecyclerFooterAdapterWrapper extends RecyclerView.Adapter<
 
     @Override
     public void onViewRecycled(RecyclerView.ViewHolder holder) {
-        if (holder instanceof FooterHolder) {
+        if (mRealAdapter == null) {
             return;
         }
         mRealAdapter.onViewRecycled(holder);
@@ -203,13 +225,11 @@ public abstract class RecyclerFooterAdapterWrapper extends RecyclerView.Adapter<
 
     @Override
     public void registerAdapterDataObserver(RecyclerView.AdapterDataObserver observer) {
-        super.registerAdapterDataObserver(observer);
         mRealAdapter.registerAdapterDataObserver(observer);
     }
 
     @Override
     public void unregisterAdapterDataObserver(RecyclerView.AdapterDataObserver observer) {
-        super.unregisterAdapterDataObserver(observer);
         mRealAdapter.unregisterAdapterDataObserver(observer);
     }
 
