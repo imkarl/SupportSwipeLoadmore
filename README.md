@@ -6,6 +6,7 @@
 * `完全兼容`：完全兼容原有代码，无需改动即可支持加载更多
 * `开箱即用`：使用简单，一行代码搞定
 * `完美体验`：体验效果优秀，最高效、可靠的实现方案
+* `可自定义`：自定义加载触发条件、自定义加载提示
 
 ##Demo
 初始化
@@ -44,7 +45,7 @@ repositories {
 - Step 2. 在你的app build.gradle 的 dependencies 中添加依赖
 ```
 dependencies {
-	compile 'com.github.alafighting:SupportSwipeLoadmore:v0.0.3'
+	compile 'com.github.alafighting:SupportSwipeLoadmore:v0.0.4'
 }
 ```
 
