@@ -132,47 +132,33 @@ public class RecyclerFooterAdapterWrapper extends RecyclerView.Adapter<RecyclerV
         if (mIsLoadmoreing != loadmoreing) {
             mIsLoadmoreing = loadmoreing;
             notifyItemChanged(getItemCount() - 1);
-            // 强制刷新
-            onBindViewHolder(mFooterHolder, getItemCount()-1);
+            if (mFooterHolder != null) {
+                // 强制刷新
+                onBindViewHolder(mFooterHolder, getItemCount() - 1);
+            }
         }
     }
     public boolean isLoadingmoreing() {
         return mIsLoadmoreing;
     }
 
-    // TODO
     boolean isLoadingRow(int position) {
         return position == getLoadingRowPosition();
     }
-//    boolean isLoadingRow(int position) {
-//        return isLoadingmoreing() && position == getLoadingRowPosition();
-//    }
 
-    // TODO
     private int getLoadingRowPosition() {
         return getItemCount() - 1;
     }
-//    private int getLoadingRowPosition() {
-//        return isLoadingmoreing() ? getItemCount() - 1 : -1;
-//    }
 
     @Override
     public int getItemViewType(int position) {
         return isLoadingRow(position) ? TYPE_FOOTER : mRealAdapter.getItemViewType(position);
     }
 
-    // TODO
     @Override
     public int getItemCount() {
         return mRealAdapter.getItemCount() + 1;
     }
-//    @Override
-//    public int getItemCount() {
-//        if (isLoadingmoreing()) {
-//            return mRealAdapter.getItemCount() + 1;
-//        }
-//        return mRealAdapter.getItemCount();
-//    }
 
     @Override
     public void setHasStableIds(boolean hasStableIds) {

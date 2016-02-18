@@ -18,7 +18,7 @@ public class RecyclerSwipeHelper {
     private static final int WHAT_ON_LOADMORE = 102;
 
     /**
-     * 触发加载更多的阀值（示例：3表示距底部仅3个item时加载更多）
+     * 默认触发加载更多的阀值
      */
     public static final int LOADING_TRIGGER_THRESHOLD = 3;
 
@@ -29,12 +29,6 @@ public class RecyclerSwipeHelper {
 
             switch (msg.what) {
                 case WHAT_ON_REFRESH:
-                    // TODO 是否有必要？
-//                    if (isLoadmoreing() && isEnabledLoadmore()) {
-//                        setRefreshing(false);
-//                        return;
-//                    }
-
                     if (mRefreshListener != null) {
                         mRefreshListener.onRefresh();
                     }
@@ -106,6 +100,7 @@ public class RecyclerSwipeHelper {
     private RecyclerFooterAdapterWrapper mAdapterWrapper;
     private SpanSizeLookupWrapper mSpanSizeLookup;
     private boolean mIsLoadmoreEnabled = true;
+    private int mThreshold = LOADING_TRIGGER_THRESHOLD;
 
     public RecyclerSwipeHelper(SwipeRefreshLayout swipe, RecyclerView recycler) {
         this.mSwipe = swipe;
@@ -229,6 +224,14 @@ public class RecyclerSwipeHelper {
         return mIsLoadmoreEnabled;
     }
 
+    /**
+     * 设置触发加载更多的阀值
+     * @param threshold 表示距底部有几个item时执行
+     */
+    public void setThreshold(int threshold) {
+        this.mThreshold = Math.max(0, threshold);
+    }
+
     public RecyclerView.Adapter getRealAdapter() {
         return mAdapterWrapper.getRealAdapter();
     }
@@ -256,7 +259,7 @@ public class RecyclerSwipeHelper {
         }
 
         // Check if end of the list is reached (counting threshold) or if there is no items at all
-        if ((totalItemCount - visibleItemCount) <= (firstVisibleItemPosition + LOADING_TRIGGER_THRESHOLD)
+        if ((totalItemCount - visibleItemCount) <= (firstVisibleItemPosition + mThreshold)
                 || totalItemCount == 0) {
             mHandler.sendEmptyMessage(WHAT_ON_LOADMORE);
         }
