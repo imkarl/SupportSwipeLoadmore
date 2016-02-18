@@ -50,6 +50,7 @@ public class RecyclerFooterAdapterWrapper extends RecyclerView.Adapter<RecyclerV
                 }
 
                 if (wrapper != RecyclerFooterAdapterWrapper.this) {
+                    mRecycler.setRecycledViewPool(getWrapper());
                     mRecycler.setAdapter(wrapper);
                 }
             }
