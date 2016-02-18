@@ -9,6 +9,8 @@ import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
+import java.lang.ref.WeakReference;
+
 /**
  * 支持底部显示加载更多的Adapter
  * @author alafighting 2016-01
@@ -21,7 +23,7 @@ public class RecyclerFooterAdapterWrapper extends RecyclerView.Adapter<RecyclerV
     private FooterViewCreator mFooterViewCreator;
     private boolean mIsLoadmoreing = false;
 
-    private FooterHolder mFooterHolder;
+    private WeakReference<FooterHolder> mFooterHolder;
 
     private static class FooterHolder extends RecyclerView.ViewHolder {
         public FooterHolder(View itemView) {
@@ -59,10 +61,9 @@ public class RecyclerFooterAdapterWrapper extends RecyclerView.Adapter<RecyclerV
         RecyclerView.ViewHolder holder;
         switch (viewType){
             case TYPE_FOOTER:
-                if (mFooterHolder == null) {
-                    mFooterHolder = new FooterHolder(createFooterView(parent));
-                }
-                holder = mFooterHolder;
+                FooterHolder footerHolder = new FooterHolder(createFooterView(parent));
+                mFooterHolder = new WeakReference<FooterHolder>(footerHolder);
+                holder = footerHolder;
                 break;
             default:
                 holder = mRealAdapter.onCreateViewHolder(parent, viewType);
@@ -133,8 +134,11 @@ public class RecyclerFooterAdapterWrapper extends RecyclerView.Adapter<RecyclerV
             mIsLoadmoreing = loadmoreing;
             notifyItemChanged(getItemCount() - 1);
             if (mFooterHolder != null) {
-                // 强制刷新
-                onBindViewHolder(mFooterHolder, getItemCount() - 1);
+                FooterHolder footerHolder = mFooterHolder.get();
+                if (footerHolder != null) {
+                    // 强制刷新
+                    onBindViewHolder(footerHolder, getItemCount() - 1);
+                }
             }
         }
     }
