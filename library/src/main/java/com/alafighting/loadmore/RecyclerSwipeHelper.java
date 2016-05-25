@@ -102,17 +102,22 @@ public class RecyclerSwipeHelper {
     private boolean mIsLoadmoreEnabled = true;
     private int mThreshold = LOADING_TRIGGER_THRESHOLD;
 
+    public RecyclerSwipeHelper(RecyclerView recycler) {
+        this(null, recycler);
+    }
     public RecyclerSwipeHelper(SwipeRefreshLayout swipe, RecyclerView recycler) {
         this.mSwipe = swipe;
         this.mRecycler = recycler;
 
         // 刷新监听
-        mSwipe.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
-            @Override
-            public void onRefresh() {
-                mHandler.sendEmptyMessage(WHAT_ON_REFRESH);
-            }
-        });
+        if (mSwipe != null) {
+            mSwipe.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
+                @Override
+                public void onRefresh() {
+                    mHandler.sendEmptyMessage(WHAT_ON_REFRESH);
+                }
+            });
+        }
 
         // 滑动监听
         mRecycler.addOnScrollListener(WrapperScrollListener);
@@ -143,7 +148,9 @@ public class RecyclerSwipeHelper {
      * 解除绑定
      */
     public void unbind() {
-        mSwipe.setOnRefreshListener(null);
+        if (mSwipe != null) {
+            mSwipe.setOnRefreshListener(null);
+        }
         mRecycler.removeOnScrollListener(WrapperScrollListener);   // Remove scroll listener
         mAdapterWrapper.unregisterAdapterDataObserver(mDataObserver); // Remove data observer
         mRecycler.setAdapter(mAdapterWrapper.getRealAdapter()); // Swap back original adapter
@@ -184,13 +191,19 @@ public class RecyclerSwipeHelper {
      * @param refreshing 是否刷新状态
      */
     public void setRefreshing(boolean refreshing) {
-        mSwipe.setRefreshing(refreshing);
+        if (mSwipe != null) {
+            mSwipe.setRefreshing(refreshing);
+        }
     }
     /**
      * 返回当前是否刷新状态
      */
     public boolean isRefreshing() {
-        return mSwipe.isRefreshing();
+        if (mSwipe != null) {
+            return mSwipe.isRefreshing();
+        } else {
+            return false;
+        }
     }
 
 
